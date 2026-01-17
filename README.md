@@ -1,4 +1,4 @@
- 📄 **Project Description (Short)**
+ 📄 **Project Description**
 
 This project is an interactive OLED-based robot face system built using Arduino and the U8g2 graphics library. It uses a capacitive touch sensor to trigger different emotional expressions, animations, and user interactions. The system displays blinking eyes, dynamic facial expressions, animated reactions, and an embedded mini-game to enhance user engagement. Designed for creative robotics and human–machine interaction experiments, this project demonstrates real-time graphics rendering, touch-based control logic, and state-driven animation flow on low-power microcontroller platforms.
 
