@@ -1,0 +1,189 @@
+#include <U8g2lib.h>
+#include <Wire.h>
+
+// ================== OLED ==================
+U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
+
+int touchPin = 2;
+
+// ================== MAIN FLOW STATES ==================
+bool padmaArrived       = false;
+bool blinkDone          = false;
+bool saptiyaMode        = false;
+bool finalLocked        = false;
+bool finalQuestionShown = false;
+bool ultraFinalLocked   = false;
+bool boreStage          = false;
+bool busyStage          = false;
+bool thookamResponseShown = false;
+bool finalNightMode     = false;
+
+// Timers
+unsigned long padmaTimer = 0;
+unsigned long finalTimer = 0;
+unsigned long boreTimer  = 0;
+unsigned long gameAutoTimer = 0;
+unsigned long busyTimer  = 0;
+
+// ================== GAME STATES ==================
+enum GameMode { MODE_FLOW, MODE_GAME_MENU, MODE_GAME_PLAYING, MODE_GAME_OVER };
+GameMode gameMode = MODE_FLOW;
+
+// Flappy Star game state
+int   starX        = 30;
+float starY        = 32;
+float velY         = 0;
+float gravity      = 0.25;
+float flapImpulse  = -2;
+int pipeX      = 128;
+int pipeGapY   = 20;
+int pipeSpeed  = 1;
+int gapHeight  = 25;
+int score = 0;
+unsigned long lastFrame = 0;
+int frameDelay = 30;
+
+// ================== TOUCH DETECTION ==================
+unsigned long lastTouch = 0;
+int debounceTime = 50;
+
+int detectTouchType() {
+  unsigned long start = millis();
+  bool firstTap = false;
+  unsigned long firstTapTime = 0;
+
+  while (millis() - start < 600) {
+    if (digitalRead(touchPin) == HIGH) {
+      firstTap = true;
+      firstTapTime = millis();
+      delay(40);
+      while (digitalRead(touchPin) == HIGH) {}
+      break;
+    }
+  }
+
+  if (!firstTap) return 0;
+
+  while (millis() - firstTapTime < 600) {
+    if (digitalRead(touchPin) == HIGH) {
+      delay(40);
+      while (digitalRead(touchPin) == HIGH) {}
+      return 2;
+    }
+  }
+
+  return 1;
+}
+
+bool isTouched() {
+  if (digitalRead(touchPin) == HIGH) {
+    if (millis() - lastTouch > (unsigned long)debounceTime) {
+      lastTouch = millis();
+      return true;
+    }
+  }
+  return false;
+}
+
+// ================== EYE / MOUTH GEOMETRY ==================
+int eyeX1 = 28;
+int eyeX2 = 78;
+int eyeY  = 18;
+int eyeW  = 22;
+int eyeH  = 32;
+
+void drawMouth() {
+  int mx = 64, my = 48, r = 8;
+  u8g2.drawCircle(mx, my, r, U8G2_DRAW_ALL);
+  u8g2.setDrawColor(0);
+  u8g2.drawBox(mx - r, my - r, r * 2, r);
+  u8g2.setDrawColor(1);
+}
+
+void drawFunnyMouth() {
+  u8g2.drawRBox(52, 52, 24, 4, 2);
+  u8g2.drawTriangle(52, 52, 76, 52, 64, 56);
+}
+
+void drawSquashedEyesText(const char *txt) {
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_ncenB08_tr);
+    u8g2.drawStr(10, 12, txt);
+    u8g2.drawRBox(eyeX1, eyeY + 10, eyeW, 14, 6);
+    u8g2.drawRBox(eyeX2, eyeY + 10, eyeW, 14, 6);
+  } while (u8g2.nextPage());
+}
+
+void drawNormalEyesRaw(int h) {
+  u8g2.drawRBox(eyeX1, eyeY, eyeW, h, 8);
+  u8g2.drawRBox(eyeX2, eyeY, eyeW, h, 8);
+}
+
+void drawNormalEyesWithMouthText(const char *txt) {
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_ncenB08_tr);
+    u8g2.drawStr(20, 12, txt);
+    drawNormalEyesRaw(eyeH);
+    drawMouth();
+  } while (u8g2.nextPage());
+}
+
+void drawIniki() {
+  drawNormalEyesWithMouthText("iniki epdi pochu ?");
+}
+
+void drawPoiSapuduFace() {
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_ncenB08_tr);
+    u8g2.drawStr(28, 12, "poi sapudu");
+    u8g2.drawRBox(eyeX1, eyeY + 10, eyeW, 10, 3);
+    u8g2.drawRBox(eyeX2, eyeY + 10, eyeW, 10, 3);
+    drawFunnyMouth();
+  } while (u8g2.nextPage());
+}
+
+// ================== ANIMATIONS ==================
+void heartPoppingAnimation() {
+  for (int s = 6; s <= 28; s += 4) {
+    u8g2.firstPage();
+    do {
+      int x = 64;
+      int y = 52 - (int)(s * 1.2);
+      u8g2.drawDisc(x - s / 2, y, s / 2);
+      u8g2.drawDisc(x + s / 2, y, s / 2);
+      u8g2.drawTriangle(x - s, y, x + s, y, x, y + s);
+    } while (u8g2.nextPage());
+    delay(120);
+  }
+}
+
+// ================== SETUP ==================
+void setup() {
+  pinMode(touchPin, INPUT);
+  u8g2.begin();
+  randomSeed(analogRead(A0));
+  drawSquashedEyesText("waiting for xxxx");
+}
+
+// ================== MAIN LOOP ==================
+void loop() {
+
+  if (!padmaArrived) {
+    if (digitalRead(touchPin) == HIGH) {
+      padmaArrived = true;
+      padmaTimer = millis();
+    }
+    drawSquashedEyesText("waiting for xxxx");
+    return;
+  }
+
+  if (!blinkDone) {
+    blinkDone = true;
+  }
+
+  drawNormalEyesWithMouthText("xxxx came!!!");
+
+}
